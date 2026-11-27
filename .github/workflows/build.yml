@@ -15,7 +15,7 @@ jobs:
         with:
           gradle-version: 8.7
           
-      - name: Compilar App V3 (Blindado)
+      - name: Compilar App V3 (Blindado Definitivo)
         run: |
           unzip -o -q *.zip
           if [ -d "RedMagicBoost" ]; then cd RedMagicBoost; fi
@@ -54,22 +54,9 @@ jobs:
           sed -i 's/android:icon="@mipmap\/ic_launcher"/android:icon="@android:drawable\/sym_def_app_icon"/' app/src/main/AndroidManifest.xml
           sed -i 's/android:roundIcon="@mipmap\/ic_launcher_round"//' app/src/main/AndroidManifest.xml
           
-          # 4. NUEVO PARCHE: Arreglar el error "auto:" de Gemini en los XML
-          python3 -c "
-          import os, re
-          for root, _, files in os.walk('app/src/main/res/layout'):
-              for f in files:
-                  if f.endswith('.xml'):
-                      p = os.path.join(root, f)
-                      with open(p, 'r', encoding='utf-8') as file:
-                          content = file.read()
-                      content = content.replace('auto:', 'app:')
-                      content = content.replace('xmlns:auto=', 'xmlns:app=')
-                      if 'app:' in content and 'xmlns:app=' not in content:
-                          content = re.sub(r'<([a-zA-Z0-9\.]+)', r'<\1 xmlns:app=\"http://schemas.android.com/apk/res-auto\"', content, count=1)
-                      with open(p, 'w', encoding='utf-8') as file:
-                          file.write(content)
-          "
+          # 4. PARCHE DEFINITIVO: Reemplazar "auto:" por "app:" en todos los XML
+          find app/src/main/res/layout -name "*.xml" -exec sed -i 's/auto:/app:/g' {} +
+          find app/src/main/res/layout -name "*.xml" -exec sed -i 's/xmlns:auto=/xmlns:app=/g' {} +
           
           # Compilar
           gradle assembleDebug --no-daemon
