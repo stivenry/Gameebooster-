@@ -15,15 +15,19 @@ jobs:
         with:
           gradle-version: 8.7
           
-      - name: Compilar App V3 (Blindado Definitivo 2.0)
+      - name: Compilar App V3 (Blindado Definitivo 3.0)
         run: |
           # 1. Descomprimir
           unzip -o -q *.zip
           
-          # 2. Buscar la carpeta real del proyecto y entrar en ella
-          PROJECT_DIR=$(find . -name "settings.gradle.kts" -exec dirname {} \; | head -n 1)
-          echo "Entrando a la carpeta del proyecto: $PROJECT_DIR"
-          cd "$PROJECT_DIR"
+          # 2. Entrar a la carpeta correcta
+          if [ -f "settings.gradle.kts" ]; then
+            echo "El proyecto está en la raíz."
+          else
+            DIR=$(find . -maxdepth 2 -name "settings.gradle.kts" -exec dirname {} \; | head -n 1)
+            echo "Entrando a la carpeta del proyecto: $DIR"
+            cd "$DIR"
+          fi
           
           # 3. Forzar AndroidX
           echo "android.useAndroidX=true" > gradle.properties
@@ -59,19 +63,32 @@ jobs:
           sed -i 's/android:icon="@mipmap\/ic_launcher"/android:icon="@android:drawable\/sym_def_app_icon"/' app/src/main/AndroidManifest.xml
           sed -i 's/android:roundIcon="@mipmap\/ic_launcher_round"//' app/src/main/AndroidManifest.xml
           
-          # 6. PARCHE MAESTRO: Reemplazar auto: por app: y arreglar los namespaces
-          find app/src/main/res/layout -name "*.xml" -exec sed -i 's/auto:/app:/g' {} +
-          find app/src/main/res/layout -name "*.xml" -exec sed -i 's/xmlns:auto=/xmlns:app=/g' {} +
+          # 6. EL DESTRUCTOR DE ERRORES (Python)
+          python3 -c "
+          import os
+          for root, dirs, files in os.walk('app/src/main/res/layout'):
+              for file in files:
+                  if file.endswith('.xml'):
+                      path = os.path.join(root, file)
+                      with open(path, 'r', encoding='utf-8') as f:
+                          content = f.read()
+                      if 'auto:' in content or 'xmlns:auto=' in content:
+                          print(f'Parcheando: {path}')
+                          content = content.replace('auto:', 'app:')
+                          content = content.replace('xmlns:auto=', 'xmlns:app=')
+                          # Inyectar el xmlns:app si no existe en la raíz del layout
+                          if 'xmlns:app=' not in content:
+                              content = content.replace('<LinearLayout', '<LinearLayout xmlns:app=\"http://schemas.android.com/apk/res-auto\"')
+                              content = content.replace('<androidx.constraintlayout.widget.ConstraintLayout', '<androidx.constraintlayout.widget.ConstraintLayout xmlns:app=\"http://schemas.android.com/apk/res-auto\"')
+                              content = content.replace('<com.google.android.material.card.MaterialCardView', '<com.google.android.material.card.MaterialCardView xmlns:app=\"http://schemas.android.com/apk/res-auto\"')
+                              content = content.replace('<androidx.fragment.app.FragmentContainerView', '<androidx.fragment.app.FragmentContainerView xmlns:app=\"http://schemas.android.com/apk/res-auto\"')
+                          with open(path, 'w', encoding='utf-8') as f:
+                              f.write(content)
+          "
           
-          # 7. Asegurarnos de que "xmlns:app" exista en la raíz de los layouts
-          for file in app/src/main/res/layout/*.xml; do
-            if grep -q "app:" "$file" && ! grep -q "xmlns:app=" "$file"; then
-              sed -i 's/<LinearLayout/<LinearLayout xmlns:app="http:\/\/schemas.android.com\/apk\/res-auto"/' "$file"
-              sed -i 's/<RelativeLayout/<RelativeLayout xmlns:app="http:\/\/schemas.android.com\/apk\/res-auto"/' "$file"
-              sed -i 's/<androidx.constraintlayout.widget.ConstraintLayout/<androidx.constraintlayout.widget.ConstraintLayout xmlns:app="http:\/\/schemas.android.com\/apk\/res-auto"/' "$file"
-              sed -i 's/<com.google.android.material.card.MaterialCardView/<com.google.android.material.card.MaterialCardView xmlns:app="http:\/\/schemas.android.com\/apk\/res-auto"/' "$file"
-            fi
-          done
+          # 7. Verificar que ya no quede ningún "auto:"
+          echo "Verificando si quedan errores de auto:"
+          grep -r "auto:" app/src/main/res/layout/ || echo "¡Limpio! Ya no hay errores auto:"
           
           # 8. Compilar
           gradle assembleDebug --no-daemon
