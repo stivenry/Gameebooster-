@@ -15,19 +15,38 @@ jobs:
         with:
           gradle-version: 8.7
           
-      - name: Compilar con AndroidX y Parches
+      - name: Compilar App V2
         run: |
-          unzip -o -q RedMagicBoost.zip
+          unzip -o -q *.zip
           if [ -d "RedMagicBoost" ]; then cd RedMagicBoost; fi
           
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           
-          # PARCHE 1: Arreglar el problema de Shizuku usando reflexión
-          sed -i 's/val process = Shizuku.newProcess(arrayOf("sh", "-c", command), null, null)/val clazz = Class.forName("rikka.shizuku.Shizuku"); val method = clazz.getDeclaredMethod("newProcess", Array<String>::class.java, Array<String>::class.java, String::class.java); method.isAccessible = true; val process = method.invoke(null, arrayOf("sh", "-c", command), null, null) as Process/' app/src/main/java/com/redmagic/boost/ShizukuHelper.kt
-          
-          # PARCHE 2: Arreglar el Int vs Boolean
-          sed -i 's/process.waitFor()/process.waitFor() == 0/' app/src/main/java/com/redmagic/boost/ShizukuHelper.kt
+          # SOBRESCRIBIMOS EL ARCHIVO COMPLETO PARA EVITAR EL DOBLE PARCHE
+          cat << 'EOF' > app/src/main/java/com/redmagic/boost/ShizukuHelper.kt
+          package com.redmagic.boost
+          import android.content.pm.PackageManager
+          import rikka.shizuku.Shizuku
+          object ShizukuHelper {
+              fun hasPermission(): Boolean {
+                  return try {
+                      if (Shizuku.isPreV11() || Shizuku.getVersion() < 11) return false
+                      Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+                  } catch (e: Exception) { false }
+              }
+              fun runCommand(command: String): Boolean {
+                  if (!hasPermission()) return false
+                  return try {
+                      val clazz = Class.forName("rikka.shizuku.Shizuku")
+                      val method = clazz.getDeclaredMethod("newProcess", Array<String>::class.java, Array<String>::class.java, String::class.java)
+                      method.isAccessible = true
+                      val process = method.invoke(null, arrayOf("sh", "-c", command), null, null) as Process
+                      process.waitFor() == 0
+                  } catch (e: Exception) { false }
+              }
+          }
+          EOF
           
           gradle assembleDebug --no-daemon
           
