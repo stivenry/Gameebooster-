@@ -20,11 +20,10 @@ jobs:
           unzip -o -q *.zip
           if [ -d "RedMagicBoost" ]; then cd RedMagicBoost; fi
           
-          # Nos aseguramos de que AndroidX esté activo
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           
-          # Parche definitivo para el código de Shizuku
+          # PARCHE 1: Arreglar el código de Shizuku
           cat << 'EOF' > app/src/main/java/com/redmagic/boost/ShizukuHelper.kt
           package com.redmagic.boost
           import android.content.pm.PackageManager
@@ -48,6 +47,10 @@ jobs:
               }
           }
           EOF
+          
+          # PARCHE 2: Arreglar el icono perdido
+          sed -i 's/android:icon="@mipmap\/ic_launcher"/android:icon="@android:drawable\/sym_def_app_icon"/' app/src/main/AndroidManifest.xml
+          sed -i '/android:roundIcon="@mipmap\/ic_launcher_round"/d' app/src/main/AndroidManifest.xml
           
           gradle assembleDebug --no-daemon
           
