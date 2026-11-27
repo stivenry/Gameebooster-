@@ -15,14 +15,19 @@ jobs:
         with:
           gradle-version: 8.7
           
-      - name: Compilar con AndroidX
+      - name: Compilar con AndroidX y Parches
         run: |
           unzip -o -q RedMagicBoost.zip
           if [ -d "RedMagicBoost" ]; then cd RedMagicBoost; fi
           
-          # AQUÍ ESTÁ LA MAGIA: Creamos el archivo que faltaba
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
+          
+          # PARCHE 1: Arreglar el problema de Shizuku usando reflexión
+          sed -i 's/val process = Shizuku.newProcess(arrayOf("sh", "-c", command), null, null)/val clazz = Class.forName("rikka.shizuku.Shizuku"); val method = clazz.getDeclaredMethod("newProcess", Array<String>::class.java, Array<String>::class.java, String::class.java); method.isAccessible = true; val process = method.invoke(null, arrayOf("sh", "-c", command), null, null) as Process/' app/src/main/java/com/redmagic/boost/ShizukuHelper.kt
+          
+          # PARCHE 2: Arreglar el Int vs Boolean
+          sed -i 's/process.waitFor()/process.waitFor() == 0/' app/src/main/java/com/redmagic/boost/ShizukuHelper.kt
           
           gradle assembleDebug --no-daemon
           
