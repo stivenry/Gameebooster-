@@ -15,10 +15,15 @@ jobs:
         with:
           gradle-version: 8.7
           
-      - name: Compilar
+      - name: Compilar con AndroidX
         run: |
           unzip -o -q RedMagicBoost.zip
           if [ -d "RedMagicBoost" ]; then cd RedMagicBoost; fi
+          
+          # AQUÍ ESTÁ LA MAGIA: Creamos el archivo que faltaba
+          echo "android.useAndroidX=true" > gradle.properties
+          echo "android.enableJetifier=true" >> gradle.properties
+          
           gradle assembleDebug --no-daemon
           
       - uses: actions/upload-artifact@v4
