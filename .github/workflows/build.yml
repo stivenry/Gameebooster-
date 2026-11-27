@@ -15,16 +15,21 @@ jobs:
         with:
           gradle-version: 8.7
           
-      - name: Compilar App V3 (Blindado Definitivo)
+      - name: Compilar App V3 (Blindado Definitivo 2.0)
         run: |
+          # 1. Descomprimir
           unzip -o -q *.zip
-          if [ -d "RedMagicBoost" ]; then cd RedMagicBoost; fi
           
-          # 1. Forzar AndroidX
+          # 2. Buscar la carpeta real del proyecto y entrar en ella
+          PROJECT_DIR=$(find . -name "settings.gradle.kts" -exec dirname {} \; | head -n 1)
+          echo "Entrando a la carpeta del proyecto: $PROJECT_DIR"
+          cd "$PROJECT_DIR"
+          
+          # 3. Forzar AndroidX
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           
-          # 2. Inyectar Shizuku perfecto
+          # 4. Inyectar Shizuku perfecto
           mkdir -p app/src/main/java/com/redmagic/boost
           cat << 'EOF' > app/src/main/java/com/redmagic/boost/ShizukuHelper.kt
           package com.redmagic.boost
@@ -50,15 +55,25 @@ jobs:
           }
           EOF
           
-          # 3. Arreglar iconos
+          # 5. Arreglar iconos
           sed -i 's/android:icon="@mipmap\/ic_launcher"/android:icon="@android:drawable\/sym_def_app_icon"/' app/src/main/AndroidManifest.xml
           sed -i 's/android:roundIcon="@mipmap\/ic_launcher_round"//' app/src/main/AndroidManifest.xml
           
-          # 4. PARCHE DEFINITIVO: Reemplazar "auto:" por "app:" en todos los XML
+          # 6. PARCHE MAESTRO: Reemplazar auto: por app: y arreglar los namespaces
           find app/src/main/res/layout -name "*.xml" -exec sed -i 's/auto:/app:/g' {} +
           find app/src/main/res/layout -name "*.xml" -exec sed -i 's/xmlns:auto=/xmlns:app=/g' {} +
           
-          # Compilar
+          # 7. Asegurarnos de que "xmlns:app" exista en la raíz de los layouts
+          for file in app/src/main/res/layout/*.xml; do
+            if grep -q "app:" "$file" && ! grep -q "xmlns:app=" "$file"; then
+              sed -i 's/<LinearLayout/<LinearLayout xmlns:app="http:\/\/schemas.android.com\/apk\/res-auto"/' "$file"
+              sed -i 's/<RelativeLayout/<RelativeLayout xmlns:app="http:\/\/schemas.android.com\/apk\/res-auto"/' "$file"
+              sed -i 's/<androidx.constraintlayout.widget.ConstraintLayout/<androidx.constraintlayout.widget.ConstraintLayout xmlns:app="http:\/\/schemas.android.com\/apk\/res-auto"/' "$file"
+              sed -i 's/<com.google.android.material.card.MaterialCardView/<com.google.android.material.card.MaterialCardView xmlns:app="http:\/\/schemas.android.com\/apk\/res-auto"/' "$file"
+            fi
+          done
+          
+          # 8. Compilar
           gradle assembleDebug --no-daemon
           
       - uses: actions/upload-artifact@v4
